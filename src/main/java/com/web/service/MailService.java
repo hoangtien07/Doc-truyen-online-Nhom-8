@@ -1,67 +1,64 @@
 package com.web.service;
 
-import java.util.Properties;
-
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.PasswordAuthentication;
-import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.mail.MailException;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Service;
 
+import javax.mail.*;
+import javax.mail.internet.AddressException;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+
 @Service
 @EnableAsync
 public class MailService {
-	
-	final String username = "@gmail.com";
-    final String password = "wsegqdgjlirdnxkh";
-    
-    @Async
-	public void sendMail(String to, String content) {
-        Properties prop = new Properties();
-		prop.put("mail.smtp.host", "smtp.gmail.com");
-        prop.put("mail.smtp.port", "465");
-        prop.put("mail.smtp.auth", "true");
-        prop.put("mail.smtp.socketFactory.port", "465");
-        prop.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
-        
-        Session session = Session.getInstance(prop,
-                new javax.mail.Authenticator() {
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(username, password);
-                    }
-                });
 
-        try {
+    private final Logger log = LoggerFactory.getLogger(MailService.class);
+    private final JavaMailSender javaMailSender;
 
-            Message message = new MimeMessage(session);
-			message.setFrom(new InternetAddress(username));
-            message.setRecipients(
-                    Message.RecipientType.TO,
-                    InternetAddress.parse(to)
-            );
-            message.setSubject("xac nhan tai khoan");
-            message.setText(content);
-           
-            Transport.send(message);
-        } catch (MessagingException e) {
-            e.printStackTrace();
-        }
-	}
-    
-    public static String randomKey(){
-        String str = "qwert1yui2op3as4dfg5hj6klzx7cvb8nmQ9WE0RTYUIOPASDFGHJKLZXCVBNM";
-        Integer length = str.length()-1;
-        StringBuilder stringBuilder = new StringBuilder("");
-        for(int i=0; i<10; i++){
-            Integer ran = (int)(Math.random()*length);
-            stringBuilder.append(str.charAt(ran));
-        }
-        return String.valueOf(stringBuilder);
+    public MailService(JavaMailSender javaMailSender) {
+        this.javaMailSender = javaMailSender;
     }
+
+
+    final static String username = "vnua.edu.hieu0210@gmail.com";
+    final static String password = "zjyyntgmdjvhvibk";
+
+    @Async
+    public void sendEmail(String to, String subject, String content, boolean isMultipart, boolean isHtml) {
+        log.debug(
+                "Send email[multipart '{}' and html '{}'] to '{}' with subject '{}' and content={}",
+                isMultipart,
+                isHtml,
+                to,
+                subject,
+                content
+        );
+
+        // Prepare message using a Spring helper
+        MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+        try {
+            MimeMessageHelper message = new MimeMessageHelper(mimeMessage, isMultipart, StandardCharsets.UTF_8.name());
+            message.setTo(to);
+            message.setFrom(username);
+            message.setSubject(subject);
+            System.out.println("subject: "+subject);
+            message.setText(content, isHtml);
+            System.out.println("content: "+content);
+            javaMailSender.send(mimeMessage);
+            log.debug("Sent email to User '{}'", to);
+        } catch (MailException | MessagingException e) {
+            log.warn("Email could not be sent to user '{}'", to, e);
+        }
+    }
+
+
 }
+

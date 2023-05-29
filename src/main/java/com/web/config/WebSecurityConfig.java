@@ -1,71 +1,84 @@
 package com.web.config;
 
+import com.web.jwt.JWTConfigurer;
+import com.web.jwt.JwtTokenProvider;
+import com.web.repository.UserRepository;
+import com.web.service.Contains;
+import com.web.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.BeanIds;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.web.authentication.MyUserDetailsService;
-
-
-@Configuration
 @EnableWebSecurity
-@Transactional
+@Configuration
+@EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true)
 public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
-
-
     @Autowired
-    private MyUserDetailsService myUserDetailsService;
-    
-    @Autowired 
-    private LoginSuccessHandler loginSuccessHandler;
+    private UserService userService;
 
-    @Autowired
-    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
+    private final JwtTokenProvider tokenProvider;
 
-        // Các User trong Database
-        auth.userDetailsService(myUserDetailsService);
+    private final UserRepository userRepository;
+
+    private final CorsFilter corsFilter;
+
+    public WebSecurityConfig(JwtTokenProvider tokenProvider, UserRepository userRepository, CorsFilter corsFilter) {
+        this.tokenProvider = tokenProvider;
+        this.userRepository = userRepository;
+        this.corsFilter = corsFilter;
+    }
+
+    @Bean(BeanIds.AUTHENTICATION_MANAGER)
+    @Override
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        // Get AuthenticationManager bean
+        return super.authenticationManagerBean();
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
 
     }
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
 
-        http.csrf().disable();
+        http
+                .csrf()
+                .disable()
+                .addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class)
+//            .addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling()
+                .and()
+                .headers()
+                .and()
+                .sessionManagement()
+                .and()
+                .authorizeRequests()
+                .antMatchers("/api/public/**").permitAll()
+                .antMatchers("/api/admin/**").hasAuthority(Contains.ROLE_ADMIN)
+                .antMatchers("/api/user/**").hasAuthority(Contains.ROLE_USER)
+                .and()
+                .httpBasic().and()
+                .apply(securityConfigurerAdapter());
+    }
 
-
-        // Các trang không yêu cầu login
-        http.authorizeRequests().antMatchers("/", "/login", "/logout").permitAll();
-
-        http.authorizeRequests().antMatchers("/user/**").access("hasRole('ROLE_USER')");
-
-        // Trang chỉ dành cho ADMIN
-        http.authorizeRequests().antMatchers("/admin/*").access("hasRole('ROLE_ADMIN')");
-
-        // Khi người dùng đã login, với vai trò XX.
-        // Nhưng truy cập vào trang yêu cầu vai trò YY,
-        // Ngoại lệ AccessDeniedException sẽ ném ra.
-        http.authorizeRequests().and().exceptionHandling().accessDeniedPage("/403");
-
-        // Cấu hình cho Login Form.
-        http.authorizeRequests().and().formLogin()//
-
-                // Submit URL của trang login
-                .loginProcessingUrl("/j_spring_security_check") // Submit URL
-                .loginPage("/login")//
-                .successHandler(loginSuccessHandler)
-//                .defaultSuccessUrl("/trang-chu")//
-                .failureUrl("/login?error=true")//
-                .usernameParameter("username")//
-                .passwordParameter("password")
-                
-
-                // Cấu hình cho Logout Page.
-                .and().logout().logoutUrl("/logout").logoutSuccessUrl("/login");
+    @Override
+    public void configure(WebSecurity web) throws Exception {
 
     }
+    private JWTConfigurer securityConfigurerAdapter() {
+        return new JWTConfigurer(tokenProvider, userRepository);
+    }
+
 }
 
